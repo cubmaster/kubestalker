@@ -64,6 +64,10 @@ export class KubernetesService {
     return this.call<void>('k8s:deleteDeployment', contextName, namespace, name);
   }
 
+  restartDeployment(contextName: string, namespace: string, name: string): Promise<any> {
+    return this.call<any>('k8s:restartDeployment', contextName, namespace, name);
+  }
+
   getStatefulSets(contextName: string, namespaces: string[]): Promise<KubeStatefulSet[]> {
     return this.call<KubeStatefulSet[]>('k8s:getStatefulSets', contextName, namespaces);
   }

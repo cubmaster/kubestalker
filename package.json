@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "~19.2.0",
-    "@angular/cli": "~19.2.0",
+    "@angular/cli": "^21.2.7",
     "@angular/compiler-cli": "~19.2.20",
     "@types/better-sqlite3": "^7.6.13",
     "@types/jasmine": "~5.1.0",
@@ -47,6 +47,7 @@
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
+    "sharp": "^0.34.5",
     "typescript": "~5.7.2",
     "wait-on": "^9.0.5"
   },
@@ -65,19 +66,21 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "src/assets/icon.icns"
+      "icon": "src/assets/icon-1024.png"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "icon": "src/assets/icon-512.png"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "src/assets/icon.png"
     }
   }
 }

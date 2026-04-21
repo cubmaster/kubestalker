@@ -3,11 +3,26 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "ng serve",
+      "name": "Electron: Serve",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "args": ["."],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "serve+compile",
+      "outFiles": ["${workspaceFolder}/dist-electron/**/*.js"],
+      "sourceMaps": true
+    },
+    {
+      "name": "Angular: Serve",
       "type": "chrome",
       "request": "launch",
       "preLaunchTask": "npm: start",
-      "url": "http://localhost:4200/"
+      "url": "http://localhost:4200/",
+      "webRoot": "${workspaceFolder}/src"
     },
     {
       "name": "ng test",

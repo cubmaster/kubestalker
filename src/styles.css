@@ -17,18 +17,48 @@ html, body {
   overflow: hidden;
 }
 
+app-root,
+app-cluster-home,
+app-cluster-list,
+app-workloads,
+app-networking,
+app-storage,
+app-configuration,
+app-nodes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 /* Dark theme overrides */
 .table-dark {
   --bs-table-bg: transparent;
   --bs-table-color: #cdd6f4;
   --bs-table-border-color: #313244;
-  --bs-table-hover-bg: rgba(137,180,250,0.05);
+  --bs-table-hover-bg: rgba(69,71,90,0.4);
+  --bs-table-hover-color: #cdd6f4;
   --bs-table-striped-bg: rgba(49,50,68,0.5);
 }
 
 .table-danger {
   --bs-table-bg: rgba(243,139,168,0.1) !important;
   --bs-table-color: #f38ba8 !important;
+  --bs-table-hover-bg: rgba(243,139,168,0.18) !important;
+  --bs-table-hover-color: #f38ba8 !important;
+  --bs-table-striped-color: #f38ba8 !important;
+}
+
+.table-dark td.text-muted,
+.table-dark th.text-muted,
+.table td.text-muted,
+.table th.text-muted {
+  color: #a6adc8 !important;
+}
+
+.table-dark .small,
+.table-dark .font-monospace {
+  color: #a6adc8;
 }
 
 .nav-tabs {

@@ -3,6 +3,17 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "electron:compile",
+      "type": "npm",
+      "script": "electron:compile",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "serve+compile",
+      "dependsOn": ["electron:compile", "npm: start"],
+      "dependsOrder": "sequence"
+    },
+    {
       "type": "npm",
       "script": "start",
       "isBackground": true,

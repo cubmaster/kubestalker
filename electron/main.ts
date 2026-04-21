@@ -14,6 +14,7 @@ let db: Database.Database | null = null;
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
+    icon: path.join(__dirname, '../src/assets/icon.png'),
     webPreferences: {
       nodeIntegration: false, contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
@@ -51,8 +52,36 @@ const kubeConfigCache = new Map<string, k8s.KubeConfig>();
 
 function getKubeConfig(contextName: string): k8s.KubeConfig {
   if (kubeConfigCache.has(contextName)) return kubeConfigCache.get(contextName)!;
+
+  // Try default config first
   const kc = new k8s.KubeConfig();
   kc.loadFromDefault();
+  if (kc.getContexts().some(c => c.name === contextName)) {
+    kc.setCurrentContext(contextName);
+    kubeConfigCache.set(contextName, kc);
+    return kc;
+  }
+
+  // Scan .kube directory for the context
+  const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
+  const kubeDir = path.join(homeDir, '.kube');
+  if (fs.existsSync(kubeDir)) {
+    for (const entry of fs.readdirSync(kubeDir)) {
+      const fullPath = path.join(kubeDir, entry);
+      try {
+        if (!fs.statSync(fullPath).isFile()) continue;
+        const fc = new k8s.KubeConfig();
+        fc.loadFromFile(fullPath);
+        if (fc.getContexts().some(c => c.name === contextName)) {
+          fc.setCurrentContext(contextName);
+          kubeConfigCache.set(contextName, fc);
+          return fc;
+        }
+      } catch (_) { /* skip */ }
+    }
+  }
+
+  // Fallback
   kc.setCurrentContext(contextName);
   kubeConfigCache.set(contextName, kc);
   return kc;
@@ -118,11 +147,52 @@ function registerK8sHandlers(): void {
 
   ipcMain.handle('k8s:getClusters', () => {
     try {
-      const kc = new k8s.KubeConfig(); kc.loadFromDefault();
-      return ok(kc.getContexts().map(ctx => {
-        const cluster = kc.getClusters().find(c => c.name === ctx.cluster);
-        return { name: ctx.name, contextName: ctx.name, server: cluster?.server || 'Unknown', kubeconfigFile: 'default' };
-      }));
+      const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
+      const kubeDir = path.join(homeDir, '.kube');
+      const allContexts: Array<{ name: string; contextName: string; server: string; kubeconfigFile: string }> = [];
+      const seen = new Set<string>();
+
+      // Helper to extract clusters from a KubeConfig
+      function extractFromFile(filePath: string): void {
+        try {
+          const kc = new k8s.KubeConfig();
+          kc.loadFromFile(filePath);
+          const fileName = path.basename(filePath);
+          for (const ctx of kc.getContexts()) {
+            if (seen.has(ctx.name)) continue;
+            seen.add(ctx.name);
+            const cluster = kc.getClusters().find(c => c.name === ctx.cluster);
+            allContexts.push({
+              name: ctx.name,
+              contextName: ctx.name,
+              server: cluster?.server || 'Unknown',
+              kubeconfigFile: fileName,
+            });
+          }
+        } catch (_) { /* skip unreadable files */ }
+      }
+
+      // Load default config first
+      const defaultConfig = path.join(kubeDir, 'config');
+      if (fs.existsSync(defaultConfig)) {
+        extractFromFile(defaultConfig);
+      }
+
+      // Scan all other files in .kube directory
+      if (fs.existsSync(kubeDir)) {
+        for (const entry of fs.readdirSync(kubeDir)) {
+          const fullPath = path.join(kubeDir, entry);
+          if (fullPath === defaultConfig) continue;
+          try {
+            const stat = fs.statSync(fullPath);
+            if (!stat.isFile()) continue;
+            // Try to read as YAML kubeconfig — extractFromFile will skip invalid ones
+            extractFromFile(fullPath);
+          } catch (_) { /* skip */ }
+        }
+      }
+
+      return ok(allContexts);
     } catch (e) { return fail(e); }
   });
 
@@ -211,6 +281,16 @@ function registerK8sHandlers(): void {
   ipcMain.handle('k8s:deleteDeployment', async (_e, ctx: string, ns: string, name: string) => {
     try { await makeApps(ctx).deleteNamespacedDeployment({ name, namespace: ns }); return ok(null); }
     catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle('k8s:restartDeployment', async (_e, ctx: string, ns: string, name: string) => {
+    try {
+      const patch = {
+        spec: { template: { metadata: { annotations: { 'kubectl.kubernetes.io/restartedAt': new Date().toISOString() } } } }
+      };
+      const result = await makeApps(ctx).patchNamespacedDeployment({ name, namespace: ns, body: patch }, mergePatchOptions);
+      return ok(result);
+    } catch (e) { return fail(e); }
   });
 
   // StatefulSets

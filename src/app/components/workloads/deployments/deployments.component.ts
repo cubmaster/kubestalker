@@ -50,6 +50,9 @@ import { KubeDeployment } from '../../../models/kubernetes.models';
               <td class="text-muted small">{{ item.strategy }}</td>
               <td class="text-muted small">{{ getAge(item.creationTimestamp) }}</td>
               <td>
+                <button class="btn btn-sm btn-outline-warning p-1 me-1" (click)="restartItem(item, $event)" title="Restart deployment">
+                  <i class="bi bi-arrow-repeat"></i>
+                </button>
                 <button class="btn btn-sm btn-outline-danger p-1" (click)="deleteItem(item, $event)">
                   <i class="bi bi-trash"></i>
                 </button>
@@ -106,5 +109,14 @@ export class DeploymentsComponent implements OnInit, OnDestroy {
     if (!confirm(`Delete deployment "${item.name}"?`)) return;
     try { await this.k8s.deleteDeployment(this.ctx, item.namespace!, item.name); this.items = this.items.filter(i => i !== item); }
     catch (err: any) { this.error = err.message; }
+  }
+
+  async restartItem(item: KubeDeployment, e: Event): Promise<void> {
+    e.stopPropagation();
+    if (!confirm(`Restart deployment "${item.name}"?`)) return;
+    try {
+      await this.k8s.restartDeployment(this.ctx, item.namespace!, item.name);
+      this.load();
+    } catch (err: any) { this.error = err.message; }
   }
 }

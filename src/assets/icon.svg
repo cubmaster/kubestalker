@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Hat brim -->
+  <ellipse cx="256" cy="200" rx="220" ry="40" fill="#1e1e2e"/>
+  <!-- Hat top -->
+  <path d="M140 200 Q140 100 256 80 Q372 100 372 200" fill="#313244"/>
+  <ellipse cx="256" cy="200" rx="116" ry="20" fill="#313244"/>
+  <!-- Face shadow -->
+  <ellipse cx="256" cy="280" rx="160" ry="80" fill="#11111b" opacity="0.6"/>
+  <!-- Left eye white -->
+  <ellipse cx="190" cy="270" rx="62" ry="38" fill="#1e1e2e" stroke="#89b4fa" stroke-width="3"/>
+  <!-- Right eye white -->
+  <ellipse cx="322" cy="270" rx="62" ry="38" fill="#1e1e2e" stroke="#89b4fa" stroke-width="3"/>
+  <!-- Left pupil -->
+  <ellipse cx="200" cy="272" rx="22" ry="26" fill="#89b4fa"/>
+  <ellipse cx="204" cy="268" rx="8" ry="10" fill="#cdd6f4"/>
+  <!-- Right pupil -->
+  <ellipse cx="332" cy="272" rx="22" ry="26" fill="#89b4fa"/>
+  <ellipse cx="336" cy="268" rx="8" ry="10" fill="#cdd6f4"/>
+  <!-- Eyebrows (suspicious look) -->
+  <path d="M130 238 Q160 218 252 240" stroke="#cdd6f4" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M382 238 Q352 218 260 240" stroke="#cdd6f4" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Nose bridge shadow -->
+  <line x1="256" y1="252" x2="256" y2="290" stroke="#313244" stroke-width="2" opacity="0.5"/>
+</svg>

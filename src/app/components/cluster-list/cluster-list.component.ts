@@ -17,7 +17,7 @@ import { KubeCluster } from '../../models/kubernetes.models';
       <div class="cluster-list-header px-3 py-3 border-bottom border-secondary">
         <div class="d-flex align-items-center justify-content-between mb-2">
           <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-kubernetes text-primary fs-5"></i>
+            <img src="assets/icon.svg" alt="KubeStalker" width="24" height="24">
             <span class="fw-bold text-white">KubeStalker</span>
           </div>
           <button class="btn btn-sm btn-outline-secondary p-1" (click)="refresh()" [disabled]="loading"
