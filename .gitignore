@@ -2,9 +2,11 @@
 
 # Compiled output
 /dist
+/dist-electron
 /tmp
 /out-tsc
 /bazel-out
+/release
 
 # Node
 /node_modules
