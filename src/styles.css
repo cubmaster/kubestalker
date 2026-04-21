@@ -1,0 +1,90 @@
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+:root {
+  --bs-body-bg: #1e1e2e;
+  --bs-body-color: #cdd6f4;
+  --bs-border-color: #313244;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* Dark theme overrides */
+.table-dark {
+  --bs-table-bg: transparent;
+  --bs-table-color: #cdd6f4;
+  --bs-table-border-color: #313244;
+  --bs-table-hover-bg: rgba(137,180,250,0.05);
+  --bs-table-striped-bg: rgba(49,50,68,0.5);
+}
+
+.table-danger {
+  --bs-table-bg: rgba(243,139,168,0.1) !important;
+  --bs-table-color: #f38ba8 !important;
+}
+
+.nav-tabs {
+  border-color: #313244;
+}
+
+.nav-tabs .nav-link {
+  color: #a6adc8;
+  border-color: transparent;
+  font-size: 0.875rem;
+}
+
+.nav-tabs .nav-link:hover {
+  color: #cdd6f4;
+  border-color: transparent;
+  background: #313244;
+}
+
+.nav-tabs .nav-link.active {
+  color: #89b4fa;
+  background: #1e1e2e;
+  border-color: #313244 #313244 #1e1e2e;
+}
+
+.form-control, .form-select {
+  background: #181825;
+  border-color: #45475a;
+  color: #cdd6f4;
+}
+.form-control:focus, .form-select:focus {
+  background: #181825;
+  border-color: #89b4fa;
+  color: #cdd6f4;
+  box-shadow: 0 0 0 0.2rem rgba(137,180,250,0.15);
+}
+.form-control::placeholder { color: #585b70; }
+
+.btn-outline-secondary {
+  color: #a6adc8;
+  border-color: #45475a;
+}
+.btn-outline-secondary:hover {
+  background: #313244;
+  border-color: #45475a;
+  color: #cdd6f4;
+}
+
+.alert-danger { background: rgba(243,139,168,0.15); border-color: #f38ba8; color: #f38ba8; }
+.alert-success { background: rgba(166,227,161,0.15); border-color: #a6e3a1; color: #a6e3a1; }
+
+.badge.bg-secondary-subtle { background: #313244 !important; }
+.text-secondary-emphasis { color: #a6adc8 !important; }
+
+.font-monospace { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #181825; }
+::-webkit-scrollbar-thumb { background: #45475a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #585b70; }
