@@ -11,7 +11,8 @@ import { YamlEditorComponent } from './yaml-editor.component';
   imports: [CommonModule, YamlEditorComponent],
   template: `
     <div class="drawer-overlay" [class.show]="isOpen" (click)="onOverlayClick($event)">
-      <div class="drawer-panel" [class.open]="isOpen" (click)="$event.stopPropagation()">
+      <div class="drawer-panel" [class.open]="isOpen" [style.width.px]="panelWidth" (click)="$event.stopPropagation()">
+        <div class="resize-handle" (mousedown)="startResize($event)"></div>
         <div class="drawer-header d-flex align-items-center justify-content-between">
           <div>
             <span class="badge bg-secondary me-2">{{ config?.resourceType }}</span>
@@ -46,6 +47,8 @@ import { YamlEditorComponent } from './yaml-editor.component';
             [resource]="fullResource"
             [resourceType]="config?.resourceType || ''"
             [readOnly]="config?.readOnly || false"
+            [contextName]="config?.contextName || ''"
+            [namespace]="config?.namespace || ''"
             (save)="onSave($event)">
           </app-yaml-editor>
         </div>
@@ -63,7 +66,7 @@ import { YamlEditorComponent } from './yaml-editor.component';
 
     .drawer-panel {
       position: fixed; top: 0; right: 0; bottom: 0;
-      width: 680px; max-width: 100vw;
+      min-width: 400px; max-width: 90vw;
       background: var(--bs-body-bg, #1e1e2e);
       color: var(--bs-body-color, #cdd6f4);
       transform: translateX(100%);
@@ -72,6 +75,15 @@ import { YamlEditorComponent } from './yaml-editor.component';
       box-shadow: -4px 0 24px rgba(0,0,0,0.5);
     }
     .drawer-panel.open { transform: translateX(0); }
+
+    .resize-handle {
+      position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
+      cursor: col-resize; z-index: 10;
+      background: transparent;
+    }
+    .resize-handle:hover, .resize-handle:active {
+      background: rgba(137, 180, 250, 0.3);
+    }
 
     .drawer-header {
       padding: 1rem 1.25rem;
@@ -94,6 +106,7 @@ export class ObjectDrawerComponent implements OnInit, OnDestroy {
   saving = false;
   error: string | null = null;
   saveSuccess = false;
+  panelWidth = 680;
 
   private sub?: Subscription;
 
@@ -230,5 +243,21 @@ export class ObjectDrawerComponent implements OnInit, OnDestroy {
 
   onOverlayClick(event: MouseEvent): void {
     this.close();
+  }
+
+  startResize(e: MouseEvent): void {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = this.panelWidth;
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX;
+      this.panelWidth = Math.max(400, Math.min(window.innerWidth * 0.9, startWidth + delta));
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   }
 }

@@ -7,6 +7,7 @@ declare global {
       invoke: (channel: string, ...args: any[]) => Promise<IpcResponse>;
       on: (channel: string, callback: (...args: any[]) => void) => void;
       removeAllListeners: (channel: string) => void;
+      send: (channel: string, ...args: any[]) => void;
     };
   }
 }
@@ -30,5 +31,17 @@ export class ElectronService {
 
   isRunningInElectron(): boolean {
     return this.isElectron;
+  }
+
+  on(channel: string, callback: (...args: any[]) => void): void {
+    if (this.isElectron && window.electronAPI) {
+      window.electronAPI.on(channel, callback);
+    }
+  }
+
+  removeAllListeners(channel: string): void {
+    if (this.isElectron && window.electronAPI) {
+      window.electronAPI.removeAllListeners(channel);
+    }
   }
 }

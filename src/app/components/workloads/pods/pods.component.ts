@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Input } from '@angular/core';
+import { Component, OnInit, OnDestroy, Input, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription, combineLatest } from 'rxjs';
@@ -6,11 +6,13 @@ import { KubernetesService } from '../../../services/kubernetes.service';
 import { StateService } from '../../../services/state.service';
 import { DrawerService } from '../../../services/drawer.service';
 import { KubePod } from '../../../models/kubernetes.models';
+import { PodTerminalComponent } from '../../pod-terminal/pod-terminal.component';
 
 @Component({
   selector: 'app-pods',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PodTerminalComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="resource-list">
       <div class="d-flex justify-content-between align-items-center mb-3">
@@ -48,7 +50,7 @@ import { KubePod } from '../../../models/kubernetes.models';
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let pod of filteredPods"
+            <tr *ngFor="let pod of filteredPods; trackBy: trackPod"
               [class.table-danger]="pod.hasError"
               (click)="openDrawer(pod)" style="cursor:pointer">
               <td>
@@ -68,6 +70,9 @@ import { KubePod } from '../../../models/kubernetes.models';
               <td class="text-muted small font-monospace">{{ pod.ip }}</td>
               <td class="text-muted small">{{ getAge(pod.creationTimestamp) }}</td>
               <td>
+                <button class="btn btn-sm btn-outline-info p-1 me-1" (click)="openTerminal(pod, $event)" title="Shell into pod">
+                  <i class="bi bi-cursor-text"></i>
+                </button>
                 <button class="btn btn-sm btn-outline-danger p-1" (click)="deletePod(pod, $event)">
                   <i class="bi bi-trash"></i>
                 </button>
@@ -80,6 +85,15 @@ import { KubePod } from '../../../models/kubernetes.models';
         </table>
       </div>
     </div>
+
+    <app-pod-terminal *ngIf="terminalPod"
+      [isOpen]="terminalOpen"
+      [podName]="terminalPod!.name"
+      [namespace]="terminalPod!.namespace || ''"
+      [contextName]="contextName"
+      [containerNames]="terminalContainers"
+      (closed)="closeTerminal()">
+    </app-pod-terminal>
   `,
   styles: [`.spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`]
 })
@@ -88,14 +102,18 @@ export class PodsComponent implements OnInit, OnDestroy {
   searchText = '';
   loading = false;
   error: string | null = null;
-  private contextName = '';
+  contextName = '';
+  terminalPod: KubePod | null = null;
+  terminalOpen = false;
+  terminalContainers: string[] = [];
   private namespaces: string[] = [];
   private sub?: Subscription;
 
   constructor(
     private k8s: KubernetesService,
     private state: StateService,
-    private drawer: DrawerService
+    private drawer: DrawerService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -109,16 +127,69 @@ export class PodsComponent implements OnInit, OnDestroy {
       });
   }
 
-  ngOnDestroy(): void { this.sub?.unsubscribe(); }
+  ngOnDestroy(): void {
+    this.sub?.unsubscribe();
+  }
 
   async loadPods(): Promise<void> {
-    this.loading = true;
+    if (!this.contextName) return;
+    const isInitial = this.pods.length === 0;
+    if (isInitial) { this.loading = true; this.cdr.markForCheck(); }
     this.error = null;
     try {
-      this.pods = await this.k8s.getPods(this.contextName, this.namespaces);
+      const fresh = await this.k8s.getPods(this.contextName, this.namespaces);
+      const changed = this.mergePods(fresh);
+      if (changed || isInitial) this.cdr.markForCheck();
     } catch (e: any) {
       this.error = e.message;
-    } finally { this.loading = false; }
+      this.cdr.markForCheck();
+    } finally {
+      if (this.loading) { this.loading = false; this.cdr.markForCheck(); }
+    }
+  }
+
+  /** Merge new data into existing array in-place. Returns true if anything changed. */
+  private mergePods(fresh: KubePod[]): boolean {
+    let changed = false;
+    const freshMap = new Map<string, KubePod>();
+    for (const p of fresh) freshMap.set(p.uid || p.name + '/' + p.namespace, p);
+
+    // Update existing pods in-place, remove stale ones
+    for (let i = this.pods.length - 1; i >= 0; i--) {
+      const key = this.pods[i].uid || this.pods[i].name + '/' + this.pods[i].namespace;
+      const updated = freshMap.get(key);
+      if (updated) {
+        const existing = this.pods[i];
+        if (existing.phase !== updated.phase) { existing.phase = updated.phase; changed = true; }
+        if (existing.ready !== updated.ready) { existing.ready = updated.ready; changed = true; }
+        if (existing.restarts !== updated.restarts) { existing.restarts = updated.restarts; changed = true; }
+        if (existing.ip !== updated.ip) { existing.ip = updated.ip; changed = true; }
+        if (existing.nodeName !== updated.nodeName) { existing.nodeName = updated.nodeName; changed = true; }
+        if (existing.hasError !== updated.hasError) { existing.hasError = updated.hasError; changed = true; }
+        if (existing.resourceVersion !== updated.resourceVersion) {
+          existing.resourceVersion = updated.resourceVersion;
+          existing.raw = updated.raw;
+          existing.conditions = updated.conditions;
+          existing.containers = updated.containers;
+          changed = true;
+        }
+        freshMap.delete(key);
+      } else {
+        this.pods.splice(i, 1);
+        changed = true;
+      }
+    }
+
+    // Append any new pods
+    for (const p of freshMap.values()) {
+      this.pods.push(p);
+      changed = true;
+    }
+    return changed;
+  }
+
+  trackPod(_index: number, pod: KubePod): string {
+    return pod.uid || pod.name + '/' + pod.namespace;
   }
 
   refresh(): void { this.loadPods(); }
@@ -166,5 +237,24 @@ export class PodsComponent implements OnInit, OnDestroy {
       await this.k8s.deletePod(this.contextName, pod.namespace!, pod.name);
       this.pods = this.pods.filter(p => p !== pod);
     } catch (err: any) { this.error = err.message; }
+    this.cdr.markForCheck();
+  }
+
+  openTerminal(pod: KubePod, e: Event): void {
+    e.stopPropagation();
+    const containers: string[] = [];
+    const raw = pod.raw || pod;
+    if (raw?.spec?.initContainers) { for (const c of raw.spec.initContainers) containers.push(c.name); }
+    if (raw?.spec?.containers) { for (const c of raw.spec.containers) containers.push(c.name); }
+    this.terminalContainers = containers.length > 0 ? containers : [''];
+    this.terminalPod = pod;
+    this.terminalOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  closeTerminal(): void {
+    this.terminalOpen = false;
+    this.cdr.markForCheck();
+    setTimeout(() => { this.terminalPod = null; this.cdr.markForCheck(); }, 300);
   }
 }

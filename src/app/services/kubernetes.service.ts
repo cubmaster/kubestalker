@@ -40,6 +40,26 @@ export class KubernetesService {
     return this.call<void>('k8s:deletePod', contextName, namespace, name);
   }
 
+  getPodLogs(contextName: string, namespace: string, name: string, container: string, tailLines: number = 500): Promise<string> {
+    return this.call<string>('k8s:getPodLogs', contextName, namespace, name, container, tailLines);
+  }
+
+  execPod(sessionId: string, contextName: string, namespace: string, podName: string, container: string): Promise<string> {
+    return this.call<string>('k8s:execPod', sessionId, contextName, namespace, podName, container);
+  }
+
+  execInput(sessionId: string, data: string): Promise<boolean> {
+    return this.call<boolean>('k8s:execInput', sessionId, data);
+  }
+
+  execResize(sessionId: string, cols: number, rows: number): Promise<boolean> {
+    return this.call<boolean>('k8s:execResize', sessionId, cols, rows);
+  }
+
+  execKill(sessionId: string): Promise<boolean> {
+    return this.call<boolean>('k8s:execKill', sessionId);
+  }
+
   getDeployments(contextName: string, namespaces: string[]): Promise<KubeDeployment[]> {
     return this.call<KubeDeployment[]>('k8s:getDeployments', contextName, namespaces);
   }

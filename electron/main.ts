@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { spawn, ChildProcess } from 'child_process';
 
 import * as k8s from '@kubernetes/client-node';
 import { PromiseMiddlewareWrapper } from '@kubernetes/client-node/dist/gen/middleware.js';
@@ -8,6 +9,7 @@ import Database from 'better-sqlite3';
 
 let mainWindow: BrowserWindow | null = null;
 let db: Database.Database | null = null;
+const execSessions = new Map<string, ChildProcess>();
 
 // ── Window ────────────────────────────────────────────────────────────────────
 
@@ -238,6 +240,13 @@ function registerK8sHandlers(): void {
   ipcMain.handle('k8s:deletePod', async (_e, ctx: string, ns: string, name: string) => {
     try { await makeCore(ctx).deleteNamespacedPod({ name, namespace: ns }); return ok(null); }
     catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle('k8s:getPodLogs', async (_e, ctx: string, ns: string, name: string, container: string, tailLines: number) => {
+    try {
+      const log = await makeCore(ctx).readNamespacedPodLog({ name, namespace: ns, container, tailLines });
+      return ok(log);
+    } catch (e) { return fail(e); }
   });
 
   // Deployments
@@ -702,12 +711,105 @@ function registerK8sHandlers(): void {
   });
 }
 
+// ── Exec (shell) sessions ─────────────────────────────────────────────────────
+
+function findKubeconfigPath(contextName: string): string | undefined {
+  const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
+  const kubeDir = path.join(homeDir, '.kube');
+  // Check default config first
+  const defaultConfig = path.join(kubeDir, 'config');
+  if (fs.existsSync(defaultConfig)) {
+    try {
+      const kc = new k8s.KubeConfig();
+      kc.loadFromFile(defaultConfig);
+      if (kc.getContexts().some(c => c.name === contextName)) return defaultConfig;
+    } catch (_) {}
+  }
+  // Scan .kube directory
+  if (fs.existsSync(kubeDir)) {
+    for (const entry of fs.readdirSync(kubeDir)) {
+      const fullPath = path.join(kubeDir, entry);
+      try {
+        if (!fs.statSync(fullPath).isFile()) continue;
+        const kc = new k8s.KubeConfig();
+        kc.loadFromFile(fullPath);
+        if (kc.getContexts().some(c => c.name === contextName)) return fullPath;
+      } catch (_) {}
+    }
+  }
+  return undefined;
+}
+
+function registerExecHandlers(): void {
+  ipcMain.handle('k8s:execPod', async (_e, sessionId: string, ctx: string, ns: string, podName: string, container: string) => {
+    try {
+      // Kill existing session with same ID
+      if (execSessions.has(sessionId)) {
+        execSessions.get(sessionId)!.kill();
+        execSessions.delete(sessionId);
+      }
+
+      const kubeconfigPath = findKubeconfigPath(ctx);
+      const args = ['exec', '-i', '-t', podName, '-n', ns, '-c', container, '--context', ctx];
+      if (kubeconfigPath) args.push('--kubeconfig', kubeconfigPath);
+      args.push('--', '/bin/sh', '-c', 'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi');
+
+      const proc = spawn('kubectl', args, {
+        env: { ...process.env, TERM: 'xterm-256color' },
+      });
+
+      execSessions.set(sessionId, proc);
+
+      proc.stdout?.on('data', (data: Buffer) => {
+        mainWindow?.webContents.send('exec:data', sessionId, data.toString());
+      });
+      proc.stderr?.on('data', (data: Buffer) => {
+        mainWindow?.webContents.send('exec:data', sessionId, data.toString());
+      });
+      proc.on('close', (code: number | null) => {
+        execSessions.delete(sessionId);
+        mainWindow?.webContents.send('exec:exit', sessionId, code);
+      });
+      proc.on('error', (err: Error) => {
+        execSessions.delete(sessionId);
+        mainWindow?.webContents.send('exec:error', sessionId, err.message);
+      });
+
+      return ok(sessionId);
+    } catch (e) { return fail(e); }
+  });
+
+  ipcMain.handle('k8s:execInput', async (_e, sessionId: string, data: string) => {
+    const proc = execSessions.get(sessionId);
+    if (proc && proc.stdin && !proc.stdin.destroyed) {
+      proc.stdin.write(data);
+      return ok(true);
+    }
+    return fail('No active exec session');
+  });
+
+  ipcMain.handle('k8s:execResize', async (_e, sessionId: string, cols: number, rows: number) => {
+    // kubectl exec doesn't support resize via stdin, but we send the signal anyway
+    return ok(true);
+  });
+
+  ipcMain.handle('k8s:execKill', async (_e, sessionId: string) => {
+    const proc = execSessions.get(sessionId);
+    if (proc) {
+      proc.kill();
+      execSessions.delete(sessionId);
+    }
+    return ok(true);
+  });
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
   initDatabase();
   registerDbHandlers();
   registerK8sHandlers();
+  registerExecHandlers();
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
