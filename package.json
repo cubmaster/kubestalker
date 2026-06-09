@@ -1,6 +1,6 @@
 {
   "name": "kubestalker",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "electron:compile": "tsc -p tsconfig.electron.json",
-    "electron:serve": "concurrently -k -n ANGULAR,ELECTRON -c cyan,yellow \"ng serve\" \"wait-on http://localhost:4200 && NODE_ENV=development electron .\"",
+    "electron:serve": "concurrently -k -n ANGULAR,ELECTRON -c cyan,yellow \"ng serve\" \"wait-on http://localhost:4200 && electron .\"",
     "electron:build": "ng build --base-href ./ && tsc -p tsconfig.electron.json",
     "electron:dist": "npm run electron:build && electron-builder"
   },

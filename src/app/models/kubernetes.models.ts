@@ -3,6 +3,7 @@ export interface KubeCluster {
   server: string;
   contextName: string;
   kubeconfigFile: string;
+  namespace?: string;
 }
 
 export interface KubeNamespace {

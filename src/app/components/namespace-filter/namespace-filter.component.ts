@@ -22,7 +22,10 @@ import { KubeNamespace } from '../../models/kubernetes.models';
       <div class="dropdown-menu namespace-dropdown p-2" [class.show]="isOpen">
         <div class="mb-2">
           <input type="text" class="form-control form-control-sm"
-            placeholder="Filter namespaces..." [(ngModel)]="filterText">
+            placeholder="Filter namespaces..."
+            [ngModel]="filterText"
+            (ngModelChange)="onFilterTextChange($event)"
+            (keydown.enter)="useTypedNamespace()">
         </div>
 
         <div class="dropdown-item-wrapper" style="max-height: 300px; overflow-y: auto;">
@@ -33,6 +36,12 @@ import { KubeNamespace } from '../../models/kubernetes.models';
             <label class="form-check-label" for="ns-all">All Namespaces</label>
           </div>
           <hr class="my-1">
+          <button *ngIf="customNamespaceCandidate" type="button"
+            class="dropdown-item small d-flex align-items-center gap-2 px-1 py-2"
+            (click)="useTypedNamespace()">
+            <i class="bi bi-plus-circle"></i>
+            Use namespace "{{ customNamespaceCandidate }}"
+          </button>
           <div *ngFor="let ns of filteredNamespaces" class="form-check mb-1">
             <input class="form-check-input" type="checkbox"
               [id]="'ns-' + ns.name"
@@ -67,11 +76,14 @@ import { KubeNamespace } from '../../models/kubernetes.models';
   `]
 })
 export class NamespaceFilterComponent implements OnInit, OnDestroy {
+  private readonly typedNamespaceDebounceMs = 350;
   namespaces: KubeNamespace[] = [];
   selectedNamespaces: string[] = [];
   filterText = '';
   isOpen = false;
   loading = false;
+  private typedNamespaceSelection: string | null = null;
+  private typedNamespaceTimer: ReturnType<typeof setTimeout> | null = null;
   private sub?: Subscription;
   private clusterSub?: Subscription;
 
@@ -91,12 +103,16 @@ export class NamespaceFilterComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
     this.clusterSub?.unsubscribe();
+    this.clearTypedNamespaceTimer();
     document.removeEventListener('click', this.onDocumentClick);
   }
 
   private onDocumentClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (!target.closest('.namespace-filter')) this.isOpen = false;
+    if (!target.closest('.namespace-filter')) {
+      this.useTypedNamespace();
+      this.isOpen = false;
+    }
   };
 
   private async loadNamespaces(contextName: string): Promise<void> {
@@ -104,7 +120,8 @@ export class NamespaceFilterComponent implements OnInit, OnDestroy {
     try {
       this.namespaces = await this.k8s.getNamespaces(contextName);
     } catch {
-      this.namespaces = [];
+      const selected = this.selectedNamespaces.map(name => ({ name, status: 'Selected' }));
+      this.namespaces = selected;
     } finally {
       this.loading = false;
     }
@@ -117,6 +134,33 @@ export class NamespaceFilterComponent implements OnInit, OnDestroy {
     );
   }
 
+  get customNamespaceCandidate(): string {
+    const typed = this.filterText.trim();
+    if (!typed) return '';
+    const exists = this.namespaces.some(ns => ns.name === typed);
+    return exists ? '' : typed;
+  }
+
+  onFilterTextChange(value: string): void {
+    this.filterText = value;
+    const typed = this.customNamespaceCandidate;
+    if (!typed) {
+      this.clearTypedNamespaceTimer();
+      if (this.typedNamespaceSelection && this.isSelected(this.typedNamespaceSelection)) {
+        this.selectAll();
+      }
+      this.typedNamespaceSelection = null;
+      return;
+    }
+    this.queueTypedNamespace(typed);
+  }
+
+  useTypedNamespace(): void {
+    this.clearTypedNamespaceTimer();
+    const typed = this.customNamespaceCandidate;
+    if (typed) this.selectTypedNamespace(typed);
+  }
+
   toggleDropdown(): void {
     this.isOpen = !this.isOpen;
   }
@@ -126,6 +170,8 @@ export class NamespaceFilterComponent implements OnInit, OnDestroy {
   }
 
   toggleNamespace(name: string): void {
+    this.clearTypedNamespaceTimer();
+    this.typedNamespaceSelection = null;
     const idx = this.selectedNamespaces.indexOf(name);
     if (idx >= 0) {
       this.selectedNamespaces = this.selectedNamespaces.filter(n => n !== name);
@@ -136,8 +182,35 @@ export class NamespaceFilterComponent implements OnInit, OnDestroy {
   }
 
   selectAll(): void {
+    this.clearTypedNamespaceTimer();
+    this.typedNamespaceSelection = null;
     this.selectedNamespaces = [];
     this.state.setSelectedNamespaces([]);
+  }
+
+  private queueTypedNamespace(name: string): void {
+    this.clearTypedNamespaceTimer();
+    this.typedNamespaceTimer = setTimeout(() => {
+      this.typedNamespaceTimer = null;
+      if (this.customNamespaceCandidate === name) this.selectTypedNamespace(name);
+    }, this.typedNamespaceDebounceMs);
+  }
+
+  private clearTypedNamespaceTimer(): void {
+    if (this.typedNamespaceTimer) {
+      clearTimeout(this.typedNamespaceTimer);
+      this.typedNamespaceTimer = null;
+    }
+  }
+
+  private selectTypedNamespace(name: string): void {
+    if (this.selectedNamespaces.length === 1 && this.selectedNamespaces[0] === name) {
+      this.typedNamespaceSelection = name;
+      return;
+    }
+    this.typedNamespaceSelection = name;
+    this.selectedNamespaces = [name];
+    this.state.setSelectedNamespaces([name]);
   }
 
   getLabel(): string {

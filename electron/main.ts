@@ -28,12 +28,34 @@ function createWindow(): void {
 
   const isDev = process.env['NODE_ENV'] === 'development' || !app.isPackaged;
   if (isDev) {
-    mainWindow.loadURL('http://localhost:4200');
+    const devUrl = 'http://localhost:4200';
+    let retries = 0;
+    const maxRetries = 30;
+
+    const tryLoad = () => {
+      mainWindow?.loadURL(devUrl).catch(() => {
+        if (retries < maxRetries && mainWindow) {
+          retries++;
+          setTimeout(tryLoad, 1000);
+        }
+      });
+    };
+
+    mainWindow.webContents.on('did-fail-load', () => {
+      if (retries < maxRetries && mainWindow) {
+        retries++;
+        setTimeout(tryLoad, 1000);
+      }
+    });
+
+    tryLoad();
     mainWindow.webContents.openDevTools();
+    // In dev mode, show immediately so the user sees something
+    mainWindow.show();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/kubestalker/browser/index.html'));
+    mainWindow.once('ready-to-show', () => mainWindow?.show());
   }
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -109,7 +131,12 @@ const mergePatchOptions = {
 async function getAllNs<T>(namespaces: string[], allFn: () => Promise<T[]>, nsFn: (ns: string) => Promise<T[]>): Promise<T[]> {
   if (namespaces.length === 0) return allFn();
   const results = await Promise.allSettled(namespaces.map(ns => nsFn(ns)));
-  return results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+  const fulfilled = results.filter((r): r is PromiseFulfilledResult<T[]> => r.status === 'fulfilled');
+  if (fulfilled.length === 0) {
+    const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (rejected) throw rejected.reason;
+  }
+  return fulfilled.flatMap(r => r.value);
 }
 
 function hasConditionError(conditions?: Array<{type: string; status: string; reason?: string}>): boolean {
@@ -151,7 +178,7 @@ function registerK8sHandlers(): void {
     try {
       const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
       const kubeDir = path.join(homeDir, '.kube');
-      const allContexts: Array<{ name: string; contextName: string; server: string; kubeconfigFile: string }> = [];
+      const allContexts: Array<{ name: string; contextName: string; server: string; kubeconfigFile: string; namespace?: string }> = [];
       const seen = new Set<string>();
 
       // Helper to extract clusters from a KubeConfig
@@ -169,6 +196,7 @@ function registerK8sHandlers(): void {
               contextName: ctx.name,
               server: cluster?.server || 'Unknown',
               kubeconfigFile: fileName,
+              namespace: ctx.namespace,
             });
           }
         } catch (_) { /* skip unreadable files */ }

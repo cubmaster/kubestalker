@@ -54,6 +54,9 @@ import { KubeCluster } from '../../models/kubernetes.models';
             <div class="cluster-server text-truncate text-muted" style="font-size: 0.7rem;" [title]="cluster.server">
               {{ cluster.server }}
             </div>
+            <div *ngIf="cluster.namespace" class="cluster-namespace text-truncate text-muted" style="font-size: 0.65rem;" [title]="cluster.namespace">
+              namespace: {{ cluster.namespace }}
+            </div>
           </div>
           <i *ngIf="selectedCluster?.contextName === cluster.contextName"
             class="bi bi-chevron-right text-primary flex-shrink-0"></i>

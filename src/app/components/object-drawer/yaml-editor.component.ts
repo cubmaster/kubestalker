@@ -44,7 +44,12 @@ import * as yaml from 'js-yaml';
       </div>
 
       <div *ngIf="activeTab === 'yaml'" class="yaml-view">
-        <pre class="bg-dark text-light p-3 rounded" style="max-height: 600px; overflow-y: auto; font-size: 12px;">{{ yamlContent }}</pre>
+        <textarea *ngIf="!readOnly" class="form-control yaml-textarea font-monospace"
+          [(ngModel)]="yamlContent" (ngModelChange)="yamlEdited = true"
+          spellcheck="false" wrap="off"
+          style="min-height: 600px; font-size: 12px; background:#11111b; color:#cdd6f4; border-color:#313244;"></textarea>
+        <pre *ngIf="readOnly" class="bg-dark text-light p-3 rounded" style="max-height: 600px; overflow-y: auto; font-size: 12px;">{{ yamlContent }}</pre>
+        <div *ngIf="yamlError" class="alert alert-danger py-2 small mt-2">{{ yamlError }}</div>
       </div>
 
       <div *ngIf="activeTab === 'describe' && resourceType === 'Pod'" class="describe-view">
@@ -144,6 +149,8 @@ export class YamlEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   activeTab: 'form' | 'yaml' | 'describe' | 'logs' = 'form';
   yamlContent = '';
+  yamlEdited = false;
+  yamlError: string | null = null;
   describeContent = '';
   formGroup: FormGroup | null = null;
   formFields: FormField[] = [];
@@ -167,6 +174,8 @@ export class YamlEditorComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.resource) return;
     this.originalResource = JSON.parse(JSON.stringify(this.resource));
     this.yamlContent = yaml.dump(this.resource, { lineWidth: -1 });
+    this.yamlEdited = false;
+    this.yamlError = null;
     if (this.resourceType === 'Pod') {
       this.describeContent = this.buildPodDescribe(this.resource);
       this.containerNames = this.getContainerNames();
@@ -229,7 +238,15 @@ export class YamlEditorComponent implements OnInit, OnChanges, OnDestroy {
     switch (this.resourceType) {
       case 'Deployment': case 'StatefulSet': case 'DaemonSet':
         controls['replicas'] = [r.spec?.replicas ?? 1];
-        this.formFields.push({ key: 'replicas', label: 'Replicas', type: 'number' }); break;
+        this.formFields.push({ key: 'replicas', label: 'Replicas', type: 'number' });
+        const containers = r.spec?.template?.spec?.containers || [];
+        for (let i = 0; i < containers.length; i++) {
+          const c = containers[i];
+          const fk = 'image_' + i;
+          controls[fk] = [c.image ?? ''];
+          this.formFields.push({ key: fk, label: 'Image: ' + c.name, type: 'text', description: 'Container image (set new tag to roll out)' });
+        }
+        break;
       case 'CronJob':
         controls['schedule'] = [r.spec?.schedule ?? ''];
         this.formFields.push({ key: 'schedule', label: 'Schedule (Cron)', type: 'text' }); break;
@@ -258,7 +275,25 @@ export class YamlEditorComponent implements OnInit, OnChanges, OnDestroy {
   removeKeyValue(fk: string, i: number): void { this.keyValueData[fk].splice(i, 1); }
   updateKeyValueKey(fk: string, i: number, v: string): void { if (this.keyValueData[fk]?.[i]) this.keyValueData[fk][i].key = v; }
   updateKeyValueValue(fk: string, i: number, v: string): void { if (this.keyValueData[fk]?.[i]) this.keyValueData[fk][i].value = v; }
-  onSave(): void { this.save.emit(this.buildPatch()); }
+  onSave(): void {
+    // If YAML was edited and we're on the YAML tab (or yamlEdited flag is set), send full resource
+    if (this.yamlEdited) {
+      try {
+        const parsed = yaml.load(this.yamlContent) as any;
+        if (!parsed || typeof parsed !== 'object') {
+          this.yamlError = 'YAML did not parse to an object';
+          return;
+        }
+        this.yamlError = null;
+        this.save.emit({ __fullResource: true, body: parsed });
+        return;
+      } catch (e: any) {
+        this.yamlError = 'Invalid YAML: ' + (e.message || String(e));
+        return;
+      }
+    }
+    this.save.emit(this.buildPatch());
+  }
   onReset(): void { this.resource = JSON.parse(JSON.stringify(this.originalResource)); this.initializeEditor(); }
 
   private buildPatch(): any {
@@ -269,7 +304,18 @@ export class YamlEditorComponent implements OnInit, OnChanges, OnDestroy {
     if (this.keyValueData['labels']) patch.metadata.labels = toObj(this.keyValueData['labels']);
     if (this.keyValueData['annotations']) patch.metadata.annotations = toObj(this.keyValueData['annotations']);
     switch (this.resourceType) {
-      case 'Deployment': case 'StatefulSet': case 'DaemonSet': patch.spec = { replicas: Number(values['replicas']) }; break;
+      case 'Deployment': case 'StatefulSet': case 'DaemonSet': {
+        patch.spec = { replicas: Number(values['replicas']) };
+        const origContainers = this.resource?.spec?.template?.spec?.containers || [];
+        const newContainers = origContainers.map((c: any, i: number) => ({
+          name: c.name,
+          image: values['image_' + i] ?? c.image,
+        }));
+        if (newContainers.length > 0) {
+          patch.spec.template = { spec: { containers: newContainers } };
+        }
+        break;
+      }
       case 'CronJob': patch.spec = { schedule: values['schedule'] }; break;
       case 'ConfigMap': patch.data = toObj(this.keyValueData['configData'] || []); break;
       case 'Secret': patch.data = {}; for (const { key, value } of (this.keyValueData['secretData'] || [])) { if (key) patch.data[key] = btoa(value); } break;

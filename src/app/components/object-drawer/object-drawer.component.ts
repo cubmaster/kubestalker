@@ -178,7 +178,11 @@ export class ObjectDrawerComponent implements OnInit, OnDestroy {
     try {
       const { contextName, namespace, resourceType } = this.config;
       const name = this.fullResource?.metadata?.name;
-      await this.patchResource(resourceType, contextName, namespace, name, patch);
+      if (patch && patch.__fullResource) {
+        await this.k8s.applyResource(contextName, namespace || '', patch.body);
+      } else {
+        await this.patchResource(resourceType, contextName, namespace, name, patch);
+      }
       this.saveSuccess = true;
       setTimeout(() => { this.saveSuccess = false; }, 3000);
       await this.loadFullResource();

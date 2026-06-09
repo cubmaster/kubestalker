@@ -19,8 +19,10 @@ export class StateService {
   clusters = this.clusters$.asObservable();
 
   setSelectedCluster(cluster: KubeCluster | null): void {
+    const defaultNamespaces = cluster?.namespace ? [cluster.namespace] : [];
+    this.state.selectedNamespaces = defaultNamespaces;
+    this.selectedNamespaces$.next(defaultNamespaces);
     this.selectedCluster$.next(cluster);
-    this.selectedNamespaces$.next([]);
     if (cluster) {
       this.state.selectedCluster = cluster.contextName;
       if (!this.state.recentClusters.includes(cluster.contextName)) {
